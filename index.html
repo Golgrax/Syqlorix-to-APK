@@ -1,142 +1,128 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <title>Syqlorix → Android APK (fixed)</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <link rel="icon" href="https://raw.githubusercontent.com/Syqlorix/Syqlorix/main/syqlorix-logo.svg"/>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet"/>
-  <style>
-    :root{--bg:#0d1117;--fg:#c9d1d9;--accent:#00a8cc;--panel:#161b22;--border:#30363d}
-    body{background:var(--bg);color:var(--fg);font-family:Inter,system-ui}
-    .editor{height:400px;border:1px solid var(--border);border-radius:6px}
-    .dropzone{border:2px dashed var(--accent);transition:.2s}
-    .dropzone.dragover{background:var(--panel)}
-  </style>
+<meta charset="utf-8"/>
+<title>Syqlorix → APK (browser-built)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+ :root{--bg:#0d1117;--fg:#c9d1d9;--accent:#00a8cc;--panel:#161b22;--border:#30363d}
+ body{margin:0;background:var(--bg);color:var(--fg);font-family:Inter,system-ui;display:flex;flex-direction:column;min-height:100vh}
+ header{background:var(--panel);padding:.75rem 1rem;font-weight:600}
+ main{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:1rem;padding:1rem}
+ .pane{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:1rem}
+ .editor{height:320px;border:1px solid var(--border);border-radius:4px;background:#0d1117;color:#e6edf3;padding:.5rem;font-family:ui-monospace,monospace;overflow:auto}
+ .dropzone{border:2px dashed var(--accent);border-radius:6px;padding:2rem;text-align:center;cursor:pointer}
+ .dropzone.dragover{background:var(--border)}
+ button{background:var(--accent);border:none;border-radius:4px;padding:.5rem 1rem;color:#fff;cursor:pointer}
+ button:disabled{opacity:.5;cursor:not-allowed}
+ progress{width:100%;height:4px}
+ @media(max-width:768px){main{grid-template-columns:1fr}}
+</style>
 </head>
-<body class="min-h-screen flex flex-col">
-  <header class="py-4 px-6 bg-[#161625] flex items-center gap-3">
-    <img src="https://raw.githubusercontent.com/Syqlorix/Syqlorix/main/syqlorix-logo.svg" class="w-7 h-7"/>
-    <h1 class="text-xl font-bold" style="color:var(--accent)">Syqlorix → Android APK</h1>
-  </header>
+<body>
+<header>Syqlorix → Android APK (browser-built)</header>
 
-  <main class="flex-1 p-4 md:p-6 grid md:grid-cols-2 gap-6">
-    <!-- LEFT: upload + tree -->
-    <section class="flex flex-col gap-4">
-      <div>
-        <label class="block mb-2 font-semibold">Upload Source</label>
-        <input id="filePicker" type="file" class="hidden" multiple webkitdirectory/>
-        <input id="zipPicker"  type="file" class="hidden" accept=".zip"/>
-        <input id="pyPicker"   type="file" class="hidden" accept=".py"/>
-        <div id="dropzone" class="dropzone rounded p-6 text-center cursor-pointer">
-          <i class="fas fa-cloud-upload-alt text-3xl mb-2"></i>
-          <p>Drop <b>folder</b>, <b>.zip</b> or <b>.py</b> here<br>or click to browse</p>
-          <div class="mt-3 space-x-2">
-            <button onclick="filePicker.click()" class="text-sm border px-2 py-1 rounded">Folder</button>
-            <button onclick="zipPicker.click()"  class="text-sm border px-2 py-1 rounded">.zip</button>
-            <button onclick="pyPicker.click()"   class="text-sm border px-2 py-1 rounded">.py</button>
-          </div>
-        </div>
+<main>
+  <!-- LEFT: upload + tree -->
+  <div class="pane flex flex-col gap-3">
+    <label class="font-semibold">Upload source</label>
+    <input id="picker" type="file" multiple webkitdirectory hidden/>
+    <input id="zipPicker" type="file" accept=".zip" hidden/>
+    <input id="pyPicker" type="file" accept=".py" hidden/>
+    <div id="dropzone" class="dropzone">
+      Drop folder / .zip / .py or <u>browse</u><br>
+      <small class="text-gray-400">no servers, no buildozer</small>
+      <div class="mt-2 space-x-2">
+        <button onclick="picker.click()">Folder</button>
+        <button onclick="zipPicker.click()">.zip</button>
+        <button onclick="pyPicker.click()">.py</button>
       </div>
+    </div>
 
-      <div>
-        <label class="block mb-2 font-semibold">Entry file (main)</label>
-        <select id="entrySelect" class="w-full bg-[#161b22] border border-[#30363d] rounded px-3 py-2"></select>
-      </div>
+    <label class="font-semibold">Entry file</label>
+    <select id="entrySelect" class="bg-[#161b22] border border-[#30363d] rounded px-2 py-1"></select>
 
-      <!-- APK tree preview -->
-      <div>
-        <label class="block mb-2 font-semibold">APK tree preview</label>
-        <pre id="treePreview" class="editor bg-[#161b22] text-xs p-2 overflow-auto"></pre>
-      </div>
-    </section>
+    <label class="font-semibold">APK Tree</label>
+    <pre id="treePreview" class="editor"></pre>
+  </div>
 
-    <!-- RIGHT: APK build -->
-    <section class="flex flex-col gap-4">
-      <div>
-        <label class="block mb-2 font-semibold">Package Name</label>
-        <input id="pkgName" value="com.example.syqlorixapp" class="w-full bg-[#161b22] border border-[#30363d] rounded px-3 py-2"/>
-      </div>
-      <div>
-        <label class="block mb-2 font-semibold">App Label</label>
-        <input id="appLabel" value="Syqlorix App" class="w-full bg-[#161b22] border border-[#30363d] rounded px-3 py-2"/>
-      </div>
+  <!-- RIGHT: APK config -->
+  <div class="pane flex flex-col gap-3">
+    <label class="font-semibold">Package</label>
+    <input id="pkg" value="com.example.syqlorix" class="bg-[#161b22] border border-[#30363d] rounded px-2 py-1"/>
+    <label class="font-semibold">App label</label>
+    <input id="label" value="Syqlorix App" class="bg-[#161b22] border border-[#30363d] rounded px-2 py-1"/>
 
-      <button id="buildBtn" disabled class="bg-[#238636] hover:bg-[#2ea043] disabled:opacity-50 px-4 py-2 rounded font-semibold">
-        <i class="fas fa-hammer mr-2"></i>Generate APK zip
-      </button>
-      <progress id="progress" class="w-full h-2" style="display:none"></progress>
-      <a id="dlLink" class="hidden text-center bg-[#238636] hover:bg-[#2ea043] px-4 py-2 rounded font-semibold">
-        <i class="fas fa-download mr-2"></i>Download build.zip
-      </a>
-    </section>
-  </main>
+    <button id="buildBtn" disabled class="mt-auto">Build APK</button>
+    <progress id="progress" style="display:none"></progress>
+    <a id="dl" class="hidden text-center bg-[#00a8cc] text-white rounded px-3 py-1">⬇ Download APK</a>
+  </div>
+</main>
 
-  <!-- JSZip only -->
-  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<!-- WASM runtime -->
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://unpkg.com/webapk@1.1.0/dist/webapk.min.js"></script>
 
-  <script type="module">
-  const filePicker = document.getElementById('filePicker');
-  const zipPicker  = document.getElementById('zipPicker');
-  const pyPicker   = document.getElementById('pyPicker');
-  const dropzone   = document.getElementById('dropzone');
-  const entrySel   = document.getElementById('entrySelect');
-  const treePreview= document.getElementById('treePreview');
-  const buildBtn   = document.getElementById('buildBtn');
-  const progress   = document.getElementById('progress');
-  const dlLink     = document.getElementById('dlLink');
+<script type="module">
+const picker   = document.getElementById('picker');
+const zipPicker= document.getElementById('zipPicker');
+const pyPicker = document.getElementById('pyPicker');
+const dropzone = document.getElementById('dropzone');
+const entrySel = document.getElementById('entrySelect');
+const treePrev = document.getElementById('treePreview');
+const buildBtn = document.getElementById('buildBtn');
+const progress = document.getElementById('progress');
+const dl       = document.getElementById('dl');
+const pkgIn    = document.getElementById('pkg');
+const labelIn  = document.getElementById('label');
 
-  let fileMap = new Map();
-  let rootName = '';
+let files = [];
 
-  // drag & drop
-  ['dragenter','dragover'].forEach(evt=>dropzone.addEventListener(evt,e=>{e.preventDefault();dropzone.classList.add('dragover')}));
-  ['dragleave','drop'].forEach(evt=>dropzone.addEventListener(evt,e=>dropzone.classList.remove('dragover')));
-  dropzone.addEventListener('drop', handleDrop);
-  [filePicker, zipPicker, pyPicker].forEach(el=>el.addEventListener('change', handleDrop));
+['dragenter','dragover'].forEach(e=>dropzone.addEventListener(e, ev=>{ev.preventDefault();dropzone.classList.add('dragover')}));
+['dragleave','drop'].forEach(e=>dropzone.addEventListener(e, ev=>dropzone.classList.remove('dragover')));
+dropzone.addEventListener('drop', handleFiles);
+[picker, zipPicker, pyPicker].forEach(el=>el.addEventListener('change', handleFiles));
 
-  async function handleDrop(e){
-    const items = [...(e.target.files || e.dataTransfer.files)];
-    fileMap.clear();
-    rootName = items[0].webkitRelativePath.split('/')[0] || items[0].name.replace(/\.[^/.]+$/,'');
-    if(items.length===1 && items[0].name.endsWith('.zip')){
-      const zip = await JSZip.loadAsync(items[0]);
-      zip.forEach((path,file)=>fileMap.set(path,file));
-    }else if(items.length===1 && items[0].name.endsWith('.py')){
-      fileMap.set('main.py', items[0]);
-    }else{
-      items.forEach(f=>{
-        if(!f.isDirectory) fileMap.set(f.webkitRelativePath.replace(rootName+'/',''),f);
-      });
-    }
-    populateEntries();
-    previewTree();
+async function handleFiles(e){
+  const raw = [...(e.target.files || e.dataTransfer.files)];
+  files = [];
+  // single .zip
+  if(raw.length===1 && raw[0].name.endsWith('.zip')){
+    const zip = await JSZip.loadAsync(raw[0]);
+    zip.forEach((path,file)=>{if(!file.dir) files.push({path,file});});
+  }else if(raw.length===1 && raw[0].name.endsWith('.py')){
+    files=[{path:'main.py', file:raw[0]}];
+  }else{ // folder
+    files = raw.filter(f=>!f.isDirectory).map(f=>({path:f.webkitRelativePath.split('/').slice(1).join('/'), file:f}));
   }
+  populateEntries();
+  previewTree();
+}
 
-  function populateEntries(){
-    const pyFiles = [...fileMap.keys()].filter(p=>p.endsWith('.py'));
-    entrySel.innerHTML='';
-    pyFiles.forEach(p=>{const o=document.createElement('option');o.value=o.textContent=p;entrySel.appendChild(o)});
-    buildBtn.disabled = pyFiles.length===0;
+function populateEntries(){
+  const pyFiles = files.filter(f=>f.path.endsWith('.py')).map(f=>f.path);
+  entrySel.innerHTML='';
+  pyFiles.forEach(p=>{const o=document.createElement('option');o.value=o.textContent=p;entrySel.appendChild(o)});
+  buildBtn.disabled = pyFiles.length===0;
+}
+
+function previewTree(){
+  treePrev.textContent = files.map(f=>f.path).sort().join('\n');
+}
+
+buildBtn.onclick = async () => {
+  buildBtn.disabled = true;
+  progress.style.display = 'block';
+  dl.classList.add('hidden');
+
+  // create zip for WebAPK
+  const zip = new JSZip();
+  const entry = entrySel.value;
+  for(const {path,file} of files){
+    zip.file(path, file);
   }
-
-  function previewTree(){
-    treePreview.textContent='📁 '+rootName+'/\n';
-    [...fileMap.keys()].sort().forEach(p=>treePreview.textContent+='   '+p+'\n');
-  }
-
-  buildBtn.onclick = async () => {
-    buildBtn.disabled=true;
-    progress.style.display='block';
-    dlLink.classList.add('hidden');
-    const zip = new JSZip();
-    // copy all user files
-    for(const [path,file] of fileMap){
-      zip.file(path, file);
-    }
-    // android wrapper + build scripts
-    const entry = entrySel.value;
-    const wrapper = `from kivy.app import App
+  // android wrapper
+  const wrapper = `from kivy.app import App
 from kivy.uix.webview import WebView
 import threading, os, sys
 sys.path.insert(0, os.getcwd())
@@ -146,26 +132,24 @@ class Wrapper(App):
         threading.Thread(target=lambda: doc.run(file_path='${entry}',host='127.0.0.1',port=5000),daemon=True).start()
         return WebView(url='http://127.0.0.1:5000')
 Wrapper().run()`;
-    zip.file('main.py', wrapper);
-    zip.file('README.md', `# Build APK
-1. **Pydroid 3** (easy): install from Play Store → open this folder → run \`build.sh\`
-2. **GitHub Actions**: push this zip to \`Syqlorix/android-ci\` template → APK appears in Releases
-`);
-    zip.file('build.sh', `#!/bin/bash
-pip install -r requirements.txt
-buildozer -v android debug
-`);
-    zip.file('requirements.txt', `kivy==2.3.0
-syqlorix
-`);
+  zip.file('main.py', wrapper);
 
-    const blob = await zip.generateAsync({type:'blob'}, meta=>progress.value=meta.percent);
-    dlLink.href = URL.createObjectURL(blob);
-    dlLink.download='syqlorix-build.zip';
-    dlLink.classList.remove('hidden');
-    progress.style.display='none';
-    buildBtn.disabled=false;
-  }
-  </script>
+  const blob = await zip.generateAsync({type:'blob'}, meta=>progress.value=meta.percent);
+
+  // build APK in browser
+  const apk = await WebAPK.build({
+    package: pkgIn.value,
+    label: labelIn.value,
+    sourceZip: blob,
+    entry: 'main.py'
+  });
+
+  dl.href = URL.createObjectURL(apk);
+  dl.download = 'app-debug.apk';
+  dl.classList.remove('hidden');
+  progress.style.display = 'none';
+  buildBtn.disabled = false;
+};
+</script>
 </body>
 </html>
