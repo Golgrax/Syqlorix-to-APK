@@ -1,117 +1,75 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Syqlorix ➜ Android APK</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="icon" href="assets/favicon.png" />
-  <meta name="theme-color" content="#0d1117" />
-  <link rel="manifest" href="data:application/manifest+json,{"name":"Syqlorix2APK","short_name":"S2A","display":"standalone","start_url":"/","background_color":"#0d1117","theme_color":"#0d1117","icons":[{"src":"assets/favicon.png","sizes":"192x192","type":"image/png"}]}" />
+  <meta charset="utf-8">
+  <title>Syqlorix → APK (one-click)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
-    *,*:before,*:after{box-sizing:border-box}
-    body{margin:0;font-family:system-ui,Segoe UI,Roboto;background:#0d1117;color:#c9d1d9;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:2rem}
-    h1{margin:.5em 0;font-size:2rem}
-    label{display:block;margin:.8em 0 .2em;font-weight:600}
-    select,input[type=file]{width:100%;padding:.6em;border-radius:6px;border:1px solid #30363d;background:#161b22;color:#c9d1d9}
-    button{cursor:pointer;background:#238636;border:0;color:#fff;padding:.7em 1.2em;border-radius:6px;font-size:1rem;margin-top:1em}
-    button:disabled{opacity:.5;cursor:not-allowed}
-    code{background:#161b22;padding:.2em .4em;border-radius:4px;font-family:ui-monospace,SFMono-Regular}
-    .hidden{display:none}
+   :root{--bg:#0d1117;--fg:#c9d1d9;--accent:#238636}
+   body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}
+   h1{margin:.2em 0}
+   #drop{border:2px dashed var(--accent);padding:3em;border-radius:8px;text-align:center;cursor:pointer}
+   #drop.dragover{background:#161b22}
+   #apkLink{display:none;margin-top:1em;font-size:1.2em;color:var(--accent)}
+   progress{width:100%;max-width:320px;margin-top:1em}
   </style>
 </head>
 <body>
   <h1>Syqlorix → Android APK</h1>
+  <p>Drop your <code>.zip</code> (or select files) → instant APK.</p>
 
-  <label>1. Upload project (folder or .zip)</label>
-  <input id="picker" type="file" webkitdirectory multiple accept=".py,.zip">
+  <input id="fileInput" type="file" webkitdirectory multiple hidden>
+  <div id="drop">Drop folder / zip here or <u>browse</u></div>
 
-  <label>2. Pick entry file</label>
-  <select id="entrySelect" disabled><option>— pick file after upload —</option></select>
+  <progress id="progress" max="100" value="0"></progress>
+  <a id="apkLink" download="app-debug.apk">⬇ Download APK</a>
 
-  <label>3. Offline fallback page (optional)</label>
-  <select id="fallbackSelect" disabled><option>— none —</option></select>
-
-  <button id="buildBtn" disabled>Generate APK</button>
-
-  <p id="status" class="hidden"></p>
+  <!-- 🧩 WASM runtime & packer -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/apk-writer@1.1.0/dist/apk-writer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pyodide@0.25.0/pyodide.js"></script>
 
   <script type="module">
-    const $ = id => document.getElementById(id);
-    const picker   = $('picker');
-    const entrySel = $('entrySelect');
-    const fallSel  = $('fallbackSelect');
-    const buildBtn = $('buildBtn');
-    const status   = $('status');
+   const fileInput = document.getElementById('fileInput');
+   const drop      = document.getElementById('drop');
+   const progress  = document.getElementById('progress');
+   const apkLink   = document.getElementById('apkLink');
 
-    let fileMap = new Map();      // path → File
-    let rootPath = '';
+   drop.onclick   = () => fileInput.click();
+   ['dragenter','dragover'].forEach(e=>drop.addEventListener(e,()=>drop.classList.add('dragover')));
+   ['dragleave','drop'].forEach(e=>drop.addEventListener(e,()=>drop.classList.remove('dragover')));
+   ['drop', 'change'].forEach(evt =>
+     window.addEventListener(evt, async (e) => {
+       const files = e.target.files || [...e.dataTransfer.files];
+       if (!files.length) return;
+       progress.style.display = 'block';
+       apkLink.style.display = 'none';
+       const apkBlob = await buildApk(files);
+       apkLink.href = URL.createObjectURL(apkBlob);
+       apkLink.style.display = 'inline-block';
+       progress.style.display = 'none';
+     })
+   );
 
-    picker.addEventListener('change', handleFiles);
-
-    function handleFiles() {
-      fileMap.clear();
-      const items = [...picker.files];
-      rootPath = items[0].webkitRelativePath.split('/')[0]; // top-level folder name
-
-      items.forEach(f => fileMap.set(f.webkitRelativePath.replace(rootPath + '/', ''), f));
-
-      const pyFiles = [...fileMap.keys()].filter(p => p.endsWith('.py'));
-      populateSelect(entrySel, pyFiles);
-      populateSelect(fallSel, [...fileMap.keys(), '— none —'], true);
-
-      [entrySel, fallSel, buildBtn].forEach(el => el.disabled = false);
-    }
-
-    function populateSelect(select, arr, keepNone = false) {
-      select.innerHTML = '';
-      if (keepNone) {
-        const none = document.createElement('option');
-        none.textContent = '— none —';
-        none.value = '';
-        select.appendChild(none);
-      }
-      arr.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = opt.textContent = p;
-        select.appendChild(opt);
-      });
-    }
-
-    buildBtn.onclick = async () => {
-      const entry = entrySel.value;
-      const fallback = fallSel.value || '';
-      if (!entry) return alert('Pick an entry file!');
-      buildBtn.disabled = true;
-      status.textContent = 'Zipping project…';
-      status.classList.remove('hidden');
-
-      // create zip in memory
-      const zip = await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm');
-      const zipFile = new zip.default();
-      for (const [path, file] of fileMap) {
-        zipFile.file(path, file);
-      }
-
-      // inject build script
-      const sh = await (await fetch('assets/py2apk.sh')).text();
-      zipFile.file('build.sh', sh.replace('APP_ENTRY_PLACEHOLDER', entry).replace('FALLBACK_PLACEHOLDER', fallback));
-
-      const blob = await zipFile.generateAsync({type: 'blob'});
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'syqlorix-project.zip';
-      a.click();
-      status.innerHTML = `
-        ✅ Project ready.<br>
-        Next step: <a href="https://github.com/kivy/python-for-android#quick-start" target="_blank" style="color:#72d5ff">build with python-for-android</a>
-        or open <code>build.sh</code> inside <a href="https://play.google.com/store/apps/details?id=ru.iiec.pydroid3" target="_blank">Pydroid 3</a>.
-      `;
-    };
+   async function buildApk(files){
+     const zip = new JSZip();
+     files.forEach(f=> zip.file(f.webkitRelativePath || f.name, f));
+     // inject minimal Android wrapper
+     const wrapper = `from kivy.app import App
+from kivy.uix.webview import WebView
+import os, threading, sys, json
+sys.path.insert(0, os.getcwd())
+exec(open('main.py').read())   # loads Syqlorix 'doc'
+class Wrapper(App):
+    def build(self):
+        threading.Thread(target=lambda: doc.run(file_path='main.py', host='127.0.0.1',port=5000),daemon=True).start()
+        return WebView(url='http://127.0.0.1:5000')
+Wrapper().run()`;
+     zip.file('wrapper.py', wrapper);
+     zip.file('main.py', zip.file('app.py') ? zip.file('app.py').async('string') : zip.file('main.py').async('string'));
+     const zipBlob = await zip.generateAsync({type:'blob'}, meta=>progress.value = meta.percent);
+     return await APKWriter.create(zipBlob, {package:'com.syqlorix.app', label:'SyqlorixPWA'});
+   }
   </script>
-  <script>
-navigator.serviceWorker?.register('assets/sw.js');
-</script>
 </body>
 </html>

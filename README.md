@@ -1,1 +1,0 @@
-# Syqlorix-to-APK
