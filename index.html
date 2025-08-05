@@ -61,10 +61,33 @@
 
 <!-- WASM runtime -->
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="https://unpkg.com/webapk@1.1.0/dist/webapk.min.js"></script>
+<script>
+/* ---------- Syqlorix-to-HTML mini converter ---------- */
+function syqlorixToHtml(code){
+  // crude but works for our scope
+  let html = '<!doctype html><html><head><meta charset="utf-8"/><title>Syqlorix App</title></head><body>';
+  // naive: look for @doc.route("/") and extract the return
+  const match = code.match(/@doc\.route\(['"]?\/['"]?\)[\s\S]*?return\s+(.+?)(?=\s*\}|\s*\n)/s);
+  if (match){
+    // quick eval inside a fake context
+    try {
+      const fakeSyqlorix = (...children)=>`<html>${children.join('')}</html>`;
+      const fakehead = (...children)=>`<head>${children.join('')}</head>`;
+      const fakebody = (...children)=>`<body>${children.join('')}</body>`;
+      const faketag = (tag)=>(...children)=>`<${tag}>${children.join('')}</${tag}>`;
+      const fake = new Function('Syqlorix','head','body','style','script','div','h1','p','a','br','nav','input','button','label','form',`return ${match[1]}`);
+      const out = fake(fakeSyqlorix,fakehead,fakebody,faketag('style'),faketag('script'),faketag('div'),faketag('h1'),faketag('p'),faketag('a'),faketag('br'),faketag('nav'),faketag('input'),faketag('button'),faketag('label'),faketag('form'));
+      html = out;
+    }catch(e){ html = `<pre style="color:red">${e}</pre>`; }
+  }
+  return html;
+}
+</script>
 
 <script type="module">
-const picker   = document.getElementById('picker');
+import * as JSZip from 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm';
+
+const picker   = document.getElementById('filePicker');
 const zipPicker= document.getElementById('zipPicker');
 const pyPicker = document.getElementById('pyPicker');
 const dropzone = document.getElementById('dropzone');
@@ -73,27 +96,24 @@ const treePrev = document.getElementById('treePreview');
 const buildBtn = document.getElementById('buildBtn');
 const progress = document.getElementById('progress');
 const dl       = document.getElementById('dl');
-const pkgIn    = document.getElementById('pkg');
-const labelIn  = document.getElementById('label');
 
 let files = [];
 
-['dragenter','dragover'].forEach(e=>dropzone.addEventListener(e, ev=>{ev.preventDefault();dropzone.classList.add('dragover')}));
-['dragleave','drop'].forEach(e=>dropzone.addEventListener(e, ev=>dropzone.classList.remove('dragover')));
-dropzone.addEventListener('drop', handleFiles);
-[picker, zipPicker, pyPicker].forEach(el=>el.addEventListener('change', handleFiles));
+['dragenter','dragover'].forEach(evt=>dropzone.addEventListener(evt,e=>{e.preventDefault();dropzone.classList.add('dragover')}));
+['dragleave','drop'].forEach(evt=>dropzone.addEventListener(evt,e=>dropzone.classList.remove('dragover')));
+dropzone.addEventListener('drop',handleFiles);
+[picker,zipPicker,pyPicker].forEach(el=>el.addEventListener('change',handleFiles));
 
 async function handleFiles(e){
-  const raw = [...(e.target.files || e.dataTransfer.files)];
+  const raw = [...(e.target.files||e.dataTransfer.files)];
   files = [];
-  // single .zip
   if(raw.length===1 && raw[0].name.endsWith('.zip')){
     const zip = await JSZip.loadAsync(raw[0]);
-    zip.forEach((path,file)=>{if(!file.dir) files.push({path,file});});
+    zip.forEach((path,file)=>{if(!file.dir)files.push({path,file})});
   }else if(raw.length===1 && raw[0].name.endsWith('.py')){
-    files=[{path:'main.py', file:raw[0]}];
-  }else{ // folder
-    files = raw.filter(f=>!f.isDirectory).map(f=>({path:f.webkitRelativePath.split('/').slice(1).join('/'), file:f}));
+    files=[{path:'main.py',file:raw[0]}];
+  }else{
+    raw.filter(f=>!f.isDirectory).forEach(f=>files.push({path:f.webkitRelativePath.split('/').slice(1).join('/'),file:f}));
   }
   populateEntries();
   previewTree();
@@ -107,49 +127,51 @@ function populateEntries(){
 }
 
 function previewTree(){
-  treePrev.textContent = files.map(f=>f.path).sort().join('\n');
+  treePrev.textContent = 'Files:\n'+files.map(f=>f.path).sort().join('\n');
 }
 
 buildBtn.onclick = async () => {
-  buildBtn.disabled = true;
-  progress.style.display = 'block';
+  buildBtn.disabled=true;
+  progress.style.display='block';
   dl.classList.add('hidden');
 
-  // create zip for WebAPK
-  const zip = new JSZip();
-  const entry = entrySel.value;
-  for(const {path,file} of files){
-    zip.file(path, file);
-  }
-  // android wrapper
-  const wrapper = `from kivy.app import App
-from kivy.uix.webview import WebView
-import threading, os, sys
-sys.path.insert(0, os.getcwd())
-exec(open('${entry}').read())  # loads Syqlorix 'doc'
-class Wrapper(App):
-    def build(self):
-        threading.Thread(target=lambda: doc.run(file_path='${entry}',host='127.0.0.1',port=5000),daemon=True).start()
-        return WebView(url='http://127.0.0.1:5000')
-Wrapper().run()`;
-  zip.file('main.py', wrapper);
+  const entryFile = files.find(f=>f.path===entrySel.value);
+  const code = await entryFile.file.text();
+  const html = syqlorixToHtml(code);
 
+  // APK skeleton (PWA)
+  const zip = new JSZip();
+  zip.file('index.html', html);
+  zip.file('manifest.json', JSON.stringify({
+    name: document.getElementById('label').value,
+    short_name: document.getElementById('label').value,
+    start_url: '/',
+    display: 'standalone',
+    background_color: '#1a1a2e',
+    theme_color: '#00a8cc'
+  }));
+  zip.file('sw.js', `self.addEventListener('install',e=>e.waitUntil(caches.open('v1').then(c=>c.addAll(['/','index.html']))));
+self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));`);
   const blob = await zip.generateAsync({type:'blob'}, meta=>progress.value=meta.percent);
 
-  // build APK in browser
-  const apk = await WebAPK.build({
-    package: pkgIn.value,
-    label: labelIn.value,
-    sourceZip: blob,
-    entry: 'main.py'
+  // Convert to APK (WebAPK)
+  const apkBlob = await window.WebAPK.build(blob, {
+    package: document.getElementById('pkg').value,
+    label: document.getElementById('label').value
   });
 
-  dl.href = URL.createObjectURL(apk);
+  dl.href = URL.createObjectURL(apkBlob);
   dl.download = 'app-debug.apk';
   dl.classList.remove('hidden');
-  progress.style.display = 'none';
-  buildBtn.disabled = false;
+  progress.style.display='none';
+  buildBtn.disabled=false;
 };
+</script>
+
+<!-- tiny WebAPK loader -->
+<script type="module">
+import { build } from 'https://cdn.jsdelivr.net/npm/@webapk/builder@1.2.0/+esm';
+window.WebAPK = { build };
 </script>
 </body>
 </html>
