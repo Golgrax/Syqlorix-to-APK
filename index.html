@@ -1,75 +1,168 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Syqlorix → APK (one-click)</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8"/>
+  <title>Syqlorix → Android APK</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link rel="icon" href="https://raw.githubusercontent.com/Syqlorix/Syqlorix/main/syqlorix-logo.svg"/>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet"/>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
   <style>
-   :root{--bg:#0d1117;--fg:#c9d1d9;--accent:#238636}
-   body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}
-   h1{margin:.2em 0}
-   #drop{border:2px dashed var(--accent);padding:3em;border-radius:8px;text-align:center;cursor:pointer}
-   #drop.dragover{background:#161b22}
-   #apkLink{display:none;margin-top:1em;font-size:1.2em;color:var(--accent)}
-   progress{width:100%;max-width:320px;margin-top:1em}
+    :root{--bg:#0d1117;--fg:#c9d1d9;--accent:#00a8cc;--panel:#161b22;--border:#30363d}
+    body{background:var(--bg);color:var(--fg);font-family:Inter,system-ui}
+    .editor{height:400px;border:1px solid var(--border);border-radius:6px}
+    .dropzone{border:2px dashed var(--accent);transition:.2s}
+    .dropzone.dragover{background:var(--panel)}
   </style>
 </head>
-<body>
-  <h1>Syqlorix → Android APK</h1>
-  <p>Drop your <code>.zip</code> (or select files) → instant APK.</p>
+<body class="min-h-screen flex flex-col">
+  <header class="py-4 px-6 bg-[#161625] flex items-center gap-3">
+    <img src="https://raw.githubusercontent.com/Syqlorix/Syqlorix/main/syqlorix-logo.svg" class="w-7 h-7"/>
+    <h1 class="text-xl font-bold" style="color:var(--accent)">Syqlorix → Android APK</h1>
+  </header>
 
-  <input id="fileInput" type="file" webkitdirectory multiple hidden>
-  <div id="drop">Drop folder / zip here or <u>browse</u></div>
+  <main class="flex-1 p-4 md:p-6 grid md:grid-cols-2 gap-6">
+    <!-- LEFT: upload + tree -->
+    <section class="flex flex-col gap-4">
+      <div>
+        <label class="block mb-2 font-semibold">Upload Source</label>
+        <input id="filePicker" type="file" class="hidden" multiple webkitdirectory/>
+        <input id="zipPicker"  type="file" class="hidden" accept=".zip"/>
+        <input id="pyPicker"   type="file" class="hidden" accept=".py"/>
+        <div id="dropzone" class="dropzone rounded p-6 text-center cursor-pointer">
+          <i class="fas fa-cloud-upload-alt text-3xl mb-2"></i>
+          <p>Drop <b>folder</b>, <b>.zip</b> or <b>.py</b> here<br>or click to browse</p>
+          <div class="mt-3 space-x-2">
+            <button onclick="document.getElementById('filePicker').click()" class="text-sm border px-2 py-1 rounded">Folder</button>
+            <button onclick="document.getElementById('zipPicker').click()"  class="text-sm border px-2 py-1 rounded">.zip</button>
+            <button onclick="document.getElementById('pyPicker').click()"   class="text-sm border px-2 py-1 rounded">.py</button>
+          </div>
+        </div>
+      </div>
 
-  <progress id="progress" max="100" value="0"></progress>
-  <a id="apkLink" download="app-debug.apk">⬇ Download APK</a>
+      <div>
+        <label class="block mb-2 font-semibold">Entry file (main)</label>
+        <select id="entrySelect" class="w-full bg-[#161b22] border border-[#30363d] rounded px-3 py-2"></select>
+      </div>
 
-  <!-- 🧩 WASM runtime & packer -->
+      <!-- APK manifest / tree preview -->
+      <div>
+        <label class="block mb-2 font-semibold">APK Tree Preview</label>
+        <div id="treeEditor" class="editor bg-[#161b22] text-sm p-2 overflow-auto"></div>
+      </div>
+    </section>
+
+    <!-- RIGHT: APK build -->
+    <section class="flex flex-col gap-4">
+      <div>
+        <label class="block mb-2 font-semibold">Package Name</label>
+        <input id="pkgName" value="com.example.syqlorixapp" class="w-full bg-[#161b22] border border-[#30363d] rounded px-3 py-2"/>
+      </div>
+      <div>
+        <label class="block mb-2 font-semibold">App Label</label>
+        <input id="appLabel" value="Syqlorix App" class="w-full bg-[#161b22] border border-[#30363d] rounded px-3 py-2"/>
+      </div>
+
+      <button id="buildBtn" disabled class="bg-[#238636] hover:bg-[#2ea043] disabled:opacity-50 px-4 py-2 rounded font-semibold">
+        <i class="fas fa-hammer mr-2"></i>Build APK
+      </button>
+      <progress id="progress" class="w-full h-2" style="display:none"></progress>
+      <a id="dlLink" class="hidden text-center bg-[#238636] hover:bg-[#2ea043] px-4 py-2 rounded font-semibold">
+        <i class="fas fa-download mr-2"></i>Download APK
+      </a>
+    </section>
+  </main>
+
+  <!-- WASM runtime -->
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/apk-writer@1.1.0/dist/apk-writer.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/pyodide@0.25.0/pyodide.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/apk-writer@1.2.0/dist/apk-writer.min.js"></script>
 
   <script type="module">
-   const fileInput = document.getElementById('fileInput');
-   const drop      = document.getElementById('drop');
-   const progress  = document.getElementById('progress');
-   const apkLink   = document.getElementById('apkLink');
+  const filePicker = document.getElementById('filePicker');
+  const zipPicker  = document.getElementById('zipPicker');
+  const pyPicker   = document.getElementById('pyPicker');
+  const dropzone   = document.getElementById('dropzone');
+  const entrySel   = document.getElementById('entrySelect');
+  const treeEditor = document.getElementById('treeEditor');
+  const buildBtn   = document.getElementById('buildBtn');
+  const progress   = document.getElementById('progress');
+  const dlLink     = document.getElementById('dlLink');
 
-   drop.onclick   = () => fileInput.click();
-   ['dragenter','dragover'].forEach(e=>drop.addEventListener(e,()=>drop.classList.add('dragover')));
-   ['dragleave','drop'].forEach(e=>drop.addEventListener(e,()=>drop.classList.remove('dragover')));
-   ['drop', 'change'].forEach(evt =>
-     window.addEventListener(evt, async (e) => {
-       const files = e.target.files || [...e.dataTransfer.files];
-       if (!files.length) return;
-       progress.style.display = 'block';
-       apkLink.style.display = 'none';
-       const apkBlob = await buildApk(files);
-       apkLink.href = URL.createObjectURL(apkBlob);
-       apkLink.style.display = 'inline-block';
-       progress.style.display = 'none';
-     })
-   );
+  let fileMap = new Map();   // relative path → File
+  let rootName = '';
 
-   async function buildApk(files){
-     const zip = new JSZip();
-     files.forEach(f=> zip.file(f.webkitRelativePath || f.name, f));
-     // inject minimal Android wrapper
-     const wrapper = `from kivy.app import App
+  // ---- drag & drop wiring ----
+  ['dragenter','dragover'].forEach(evt=>dropzone.addEventListener(evt,e=>{e.preventDefault();dropzone.classList.add('dragover')}));
+  ['dragleave','drop'].forEach(evt=>dropzone.addEventListener(evt,e=>dropzone.classList.remove('dragover')));
+  dropzone.addEventListener('drop', handleDrop);
+
+  [filePicker, zipPicker, pyPicker].forEach(el=>el.addEventListener('change', handleDrop));
+
+  async function handleDrop(e){
+    const items = [...(e.target.files || e.dataTransfer.files)];
+    fileMap.clear();
+    rootName = items[0].webkitRelativePath.split('/')[0] || items[0].name.replace(/\.[^/.]+$/,'');
+    // zip?
+    if(items.length===1 && items[0].name.endsWith('.zip')){
+      const zip = await JSZip.loadAsync(items[0]);
+      zip.forEach((path,file)=>fileMap.set(path,file));
+    }else if(items.length===1 && items[0].name.endsWith('.py')){
+      fileMap.set('main.py', items[0]);
+    }else{ // folder
+      items.forEach(f=>fileMap.set(f.webkitRelativePath.replace(rootName+'/',''),f));
+    }
+    populateEntries();
+    previewTree();
+  }
+
+  function populateEntries(){
+    const pyFiles = [...fileMap.keys()].filter(p=>p.endsWith('.py'));
+    entrySel.innerHTML='';
+    pyFiles.forEach(p=>{
+      const opt=document.createElement('option'); opt.value=p; opt.textContent=p; entrySel.appendChild(opt);
+    });
+    buildBtn.disabled = pyFiles.length===0;
+  }
+
+  function previewTree(){
+    treeEditor.textContent='📁 '+rootName+'/\n';
+    [...fileMap.keys()].sort().forEach(p=>{
+      treeEditor.textContent+='   '+p+'\n';
+    });
+  }
+
+  buildBtn.onclick = async () => {
+    buildBtn.disabled=true;
+    progress.style.display='block';
+    dlLink.classList.add('hidden');
+    const zip = new JSZip();
+    // copy all user files
+    for(const [path,file] of fileMap){
+      zip.file(path, file);
+    }
+    // tiny android wrapper
+    const entry = entrySel.value;
+    const wrapper = `from kivy.app import App
 from kivy.uix.webview import WebView
-import os, threading, sys, json
-sys.path.insert(0, os.getcwd())
-exec(open('main.py').read())   # loads Syqlorix 'doc'
+import threading, os, sys
+sys.path.insert(0,os.getcwd())
+exec(open('${entry}').read())  # loads Syqlorix 'doc'
 class Wrapper(App):
     def build(self):
-        threading.Thread(target=lambda: doc.run(file_path='main.py', host='127.0.0.1',port=5000),daemon=True).start()
+        threading.Thread(target=lambda: doc.run(file_path='${entry}',host='127.0.0.1',port=5000),daemon=True).start()
         return WebView(url='http://127.0.0.1:5000')
 Wrapper().run()`;
-     zip.file('wrapper.py', wrapper);
-     zip.file('main.py', zip.file('app.py') ? zip.file('app.py').async('string') : zip.file('main.py').async('string'));
-     const zipBlob = await zip.generateAsync({type:'blob'}, meta=>progress.value = meta.percent);
-     return await APKWriter.create(zipBlob, {package:'com.syqlorix.app', label:'SyqlorixPWA'});
-   }
+    zip.file('main.py', wrapper);
+    const blob = await zip.generateAsync({type:'blob'}, meta=>progress.value=meta.percent);
+    const pkg = document.getElementById('pkgName').value;
+    const label = document.getElementById('appLabel').value;
+    const apkBlob = await APKWriter.create(blob,{package:pkg,label});
+    dlLink.href = URL.createObjectURL(apkBlob);
+    dlLink.download='app-debug.apk';
+    dlLink.classList.remove('hidden');
+    progress.style.display='none';
+    buildBtn.disabled=false;
+  }
   </script>
 </body>
 </html>
