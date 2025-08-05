@@ -1,177 +1,107 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<title>Syqlorix → APK (browser-built)</title>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<style>
- :root{--bg:#0d1117;--fg:#c9d1d9;--accent:#00a8cc;--panel:#161b22;--border:#30363d}
- body{margin:0;background:var(--bg);color:var(--fg);font-family:Inter,system-ui;display:flex;flex-direction:column;min-height:100vh}
- header{background:var(--panel);padding:.75rem 1rem;font-weight:600}
- main{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:1rem;padding:1rem}
- .pane{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:1rem}
- .editor{height:320px;border:1px solid var(--border);border-radius:4px;background:#0d1117;color:#e6edf3;padding:.5rem;font-family:ui-monospace,monospace;overflow:auto}
- .dropzone{border:2px dashed var(--accent);border-radius:6px;padding:2rem;text-align:center;cursor:pointer}
- .dropzone.dragover{background:var(--border)}
- button{background:var(--accent);border:none;border-radius:4px;padding:.5rem 1rem;color:#fff;cursor:pointer}
- button:disabled{opacity:.5;cursor:not-allowed}
- progress{width:100%;height:4px}
- @media(max-width:768px){main{grid-template-columns:1fr}}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Syqlorix → APK Converter</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-<header>Syqlorix → Android APK (browser-built)</header>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <i class="fab fa-android"></i>
+                <h1>Syqlorix → APK</h1>
+            </div>
+            <p class="subtitle">Convert your Syqlorix Python apps to Android APK files</p>
+        </header>
 
-<main>
-  <!-- LEFT: upload + tree -->
-  <div class="pane flex flex-col gap-3">
-    <label class="font-semibold">Upload source</label>
-    <input id="picker" type="file" multiple webkitdirectory hidden/>
-    <input id="zipPicker" type="file" accept=".zip" hidden/>
-    <input id="pyPicker" type="file" accept=".py" hidden/>
-    <div id="dropzone" class="dropzone">
-      Drop folder / .zip / .py or <u>browse</u><br>
-      <small class="text-gray-400">no servers, no buildozer</small>
-      <div class="mt-2 space-x-2">
-        <button onclick="picker.click()">Folder</button>
-        <button onclick="zipPicker.click()">.zip</button>
-        <button onclick="pyPicker.click()">.py</button>
-      </div>
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Upload Section -->
+            <section class="upload-section">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                    </div>
+                    <h3>Upload Your Syqlorix Project</h3>
+                    <p>Drop your Python files here or click to browse</p>
+                    <input type="file" id="fileInput" accept=".py,.zip" multiple hidden>
+                    <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                        <i class="fas fa-folder-open"></i> Browse Files
+                    </button>
+                </div>
+                
+                <!-- File List -->
+                <div class="file-list" id="fileList" style="display: none;">
+                    <h4><i class="fas fa-file-code"></i> Uploaded Files</h4>
+                    <div id="fileItems"></div>
+                </div>
+            </section>
+
+            <!-- Configuration Section -->
+            <section class="config-section">
+                <h3><i class="fas fa-cog"></i> App Configuration</h3>
+                <div class="config-grid">
+                    <div class="config-item">
+                        <label for="appName">App Name</label>
+                        <input type="text" id="appName" value="Syqlorix App" placeholder="Enter app name">
+                    </div>
+                    <div class="config-item">
+                        <label for="packageName">Package Name</label>
+                        <input type="text" id="packageName" value="com.example.syqlorix" placeholder="com.example.app">
+                    </div>
+                    <div class="config-item">
+                        <label for="entryFile">Entry File</label>
+                        <select id="entryFile">
+                            <option value="">Select main Python file</option>
+                        </select>
+                    </div>
+                    <div class="config-item">
+                        <label for="appVersion">Version</label>
+                        <input type="text" id="appVersion" value="1.0.0" placeholder="1.0.0">
+                    </div>
+                </div>
+            </section>
+
+            <!-- Preview Section -->
+            <section class="preview-section">
+                <h3><i class="fas fa-eye"></i> HTML Preview</h3>
+                <div class="preview-container">
+                    <iframe id="previewFrame" src="about:blank"></iframe>
+                </div>
+            </section>
+
+            <!-- Build Section -->
+            <section class="build-section">
+                <button class="build-btn" id="buildBtn" disabled>
+                    <i class="fas fa-hammer"></i> Build APK
+                </button>
+                <div class="progress-container" id="progressContainer" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <p class="progress-text" id="progressText">Building APK...</p>
+                </div>
+                <div class="download-container" id="downloadContainer" style="display: none;">
+                    <button class="download-btn" id="downloadBtn">
+                        <i class="fas fa-download"></i> Download APK
+                    </button>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2025 Syqlorix APK Converter. Built with ❤️ for the Syqlorix community.</p>
+        </footer>
     </div>
 
-    <label class="font-semibold">Entry file</label>
-    <select id="entrySelect" class="bg-[#161b22] border border-[#30363d] rounded px-2 py-1"></select>
-
-    <label class="font-semibold">APK Tree</label>
-    <pre id="treePreview" class="editor"></pre>
-  </div>
-
-  <!-- RIGHT: APK config -->
-  <div class="pane flex flex-col gap-3">
-    <label class="font-semibold">Package</label>
-    <input id="pkg" value="com.example.syqlorix" class="bg-[#161b22] border border-[#30363d] rounded px-2 py-1"/>
-    <label class="font-semibold">App label</label>
-    <input id="label" value="Syqlorix App" class="bg-[#161b22] border border-[#30363d] rounded px-2 py-1"/>
-
-    <button id="buildBtn" disabled class="mt-auto">Build APK</button>
-    <progress id="progress" style="display:none"></progress>
-    <a id="dl" class="hidden text-center bg-[#00a8cc] text-white rounded px-3 py-1">⬇ Download APK</a>
-  </div>
-</main>
-
-<!-- WASM runtime -->
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script>
-/* ---------- Syqlorix-to-HTML mini converter ---------- */
-function syqlorixToHtml(code){
-  // crude but works for our scope
-  let html = '<!doctype html><html><head><meta charset="utf-8"/><title>Syqlorix App</title></head><body>';
-  // naive: look for @doc.route("/") and extract the return
-  const match = code.match(/@doc\.route\(['"]?\/['"]?\)[\s\S]*?return\s+(.+?)(?=\s*\}|\s*\n)/s);
-  if (match){
-    // quick eval inside a fake context
-    try {
-      const fakeSyqlorix = (...children)=>`<html>${children.join('')}</html>`;
-      const fakehead = (...children)=>`<head>${children.join('')}</head>`;
-      const fakebody = (...children)=>`<body>${children.join('')}</body>`;
-      const faketag = (tag)=>(...children)=>`<${tag}>${children.join('')}</${tag}>`;
-      const fake = new Function('Syqlorix','head','body','style','script','div','h1','p','a','br','nav','input','button','label','form',`return ${match[1]}`);
-      const out = fake(fakeSyqlorix,fakehead,fakebody,faketag('style'),faketag('script'),faketag('div'),faketag('h1'),faketag('p'),faketag('a'),faketag('br'),faketag('nav'),faketag('input'),faketag('button'),faketag('label'),faketag('form'));
-      html = out;
-    }catch(e){ html = `<pre style="color:red">${e}</pre>`; }
-  }
-  return html;
-}
-</script>
-
-<script type="module">
-import * as JSZip from 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm';
-
-const picker   = document.getElementById('filePicker');
-const zipPicker= document.getElementById('zipPicker');
-const pyPicker = document.getElementById('pyPicker');
-const dropzone = document.getElementById('dropzone');
-const entrySel = document.getElementById('entrySelect');
-const treePrev = document.getElementById('treePreview');
-const buildBtn = document.getElementById('buildBtn');
-const progress = document.getElementById('progress');
-const dl       = document.getElementById('dl');
-
-let files = [];
-
-['dragenter','dragover'].forEach(evt=>dropzone.addEventListener(evt,e=>{e.preventDefault();dropzone.classList.add('dragover')}));
-['dragleave','drop'].forEach(evt=>dropzone.addEventListener(evt,e=>dropzone.classList.remove('dragover')));
-dropzone.addEventListener('drop',handleFiles);
-[picker,zipPicker,pyPicker].forEach(el=>el.addEventListener('change',handleFiles));
-
-async function handleFiles(e){
-  const raw = [...(e.target.files||e.dataTransfer.files)];
-  files = [];
-  if(raw.length===1 && raw[0].name.endsWith('.zip')){
-    const zip = await JSZip.loadAsync(raw[0]);
-    zip.forEach((path,file)=>{if(!file.dir)files.push({path,file})});
-  }else if(raw.length===1 && raw[0].name.endsWith('.py')){
-    files=[{path:'main.py',file:raw[0]}];
-  }else{
-    raw.filter(f=>!f.isDirectory).forEach(f=>files.push({path:f.webkitRelativePath.split('/').slice(1).join('/'),file:f}));
-  }
-  populateEntries();
-  previewTree();
-}
-
-function populateEntries(){
-  const pyFiles = files.filter(f=>f.path.endsWith('.py')).map(f=>f.path);
-  entrySel.innerHTML='';
-  pyFiles.forEach(p=>{const o=document.createElement('option');o.value=o.textContent=p;entrySel.appendChild(o)});
-  buildBtn.disabled = pyFiles.length===0;
-}
-
-function previewTree(){
-  treePrev.textContent = 'Files:\n'+files.map(f=>f.path).sort().join('\n');
-}
-
-buildBtn.onclick = async () => {
-  buildBtn.disabled=true;
-  progress.style.display='block';
-  dl.classList.add('hidden');
-
-  const entryFile = files.find(f=>f.path===entrySel.value);
-  const code = await entryFile.file.text();
-  const html = syqlorixToHtml(code);
-
-  // APK skeleton (PWA)
-  const zip = new JSZip();
-  zip.file('index.html', html);
-  zip.file('manifest.json', JSON.stringify({
-    name: document.getElementById('label').value,
-    short_name: document.getElementById('label').value,
-    start_url: '/',
-    display: 'standalone',
-    background_color: '#1a1a2e',
-    theme_color: '#00a8cc'
-  }));
-  zip.file('sw.js', `self.addEventListener('install',e=>e.waitUntil(caches.open('v1').then(c=>c.addAll(['/','index.html']))));
-self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));`);
-  const blob = await zip.generateAsync({type:'blob'}, meta=>progress.value=meta.percent);
-
-  // Convert to APK (WebAPK)
-  const apkBlob = await window.WebAPK.build(blob, {
-    package: document.getElementById('pkg').value,
-    label: document.getElementById('label').value
-  });
-
-  dl.href = URL.createObjectURL(apkBlob);
-  dl.download = 'app-debug.apk';
-  dl.classList.remove('hidden');
-  progress.style.display='none';
-  buildBtn.disabled=false;
-};
-</script>
-
-<!-- tiny WebAPK loader -->
-<script type="module">
-import { build } from 'https://cdn.jsdelivr.net/npm/@webapk/builder@1.2.0/+esm';
-window.WebAPK = { build };
-</script>
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
+

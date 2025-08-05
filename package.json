@@ -1,0 +1,28 @@
+{
+  "name": "syqlorix-apk-converter",
+  "version": "1.0.0",
+  "description": "A web-based converter for Syqlorix Python apps to Android APK files",
+  "main": "index.html",
+  "scripts": {
+    "start": "serve .",
+    "build": "echo 'No build step required for static site'",
+    "dev": "serve . -p 3000"
+  },
+  "keywords": [
+    "syqlorix",
+    "apk",
+    "converter",
+    "python",
+    "android",
+    "pwa"
+  ],
+  "author": "Syqlorix Community",
+  "license": "MIT",
+  "devDependencies": {
+    "serve": "^14.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
+
